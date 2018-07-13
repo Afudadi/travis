@@ -1,5 +1,5 @@
-hash: c748f2fc4e1dbf691140d859b775737e8ab868213ac8e9caa50cd2f2a80962df
-updated: 2018-07-03T18:31:41.135682532+08:00
+hash: c807cc8318fc7865ad036e9d5417d70e062a3a22dde9a205cf9b8a2320b2d0d7
+updated: 2018-07-06T17:53:34.159369457+08:00
 imports:
 - name: github.com/aristanetworks/goarista
   version: 59944ff78bc1de686b0aba1444dfd380f48f03d4
@@ -17,8 +17,6 @@ imports:
   - btcec
 - name: github.com/BurntSushi/toml
   version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
-- name: github.com/cosmos/cosmos-sdk
-  version: be92f16b52cdeaba6dddaa62e0a8d1eed9e9640e
 - name: github.com/davecgh/go-spew
   version: 346938d642f2ec3594ed81d874461961cd0faa76
   subpackages:
@@ -123,8 +121,6 @@ imports:
   - ptypes/timestamp
 - name: github.com/golang/snappy
   version: 2e65f85255dbc3072edf28d6b5b8efc472979f5a
-- name: github.com/gorilla/mux
-  version: e3702bed27f0d39777b0b37b664b6280e8ef8fbf
 - name: github.com/gorilla/websocket
   version: 5ed622c449da6d44c3c8329331ff47a9e5844f71
 - name: github.com/hashicorp/golang-lru
@@ -261,12 +257,12 @@ imports:
 - name: github.com/tendermint/go-amino
   version: 2106ca61d91029c931fd54968c2bb02dc96b1412
 - name: github.com/tendermint/go-wire
-  version: b8470691aa56b059e06dbfced95a4a21a407df81
+  version: fd33313baedb08fffafa3837994d3f02a6587baf
   repo: https://github.com/CyberMiles/go-wire.git
   subpackages:
   - data
 - name: github.com/tendermint/iavl
-  version: fd37a0fa3a7454423233bc3d5ea828f38e0af787
+  version: 35f66e53d9b01e83b30de68b931f54b2477a94c9
 - name: github.com/tendermint/tendermint
   version: dfa9a9a30a666132425b29454e90a472aa579a48
   subpackages:
@@ -322,13 +318,6 @@ imports:
   - state/txindex/null
   - types
   - version
-- name: github.com/tendermint/tmlibs
-  version: 692f1d86a6e2c0efa698fd1e4541b68c74ffaf38
-  subpackages:
-  - cli
-  - common
-  - db
-  - log
 - name: golang.org/x/crypto
   version: 027cca12c2d63e3d62b670d901e8a2c95854feec
   subpackages:

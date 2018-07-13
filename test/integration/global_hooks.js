@@ -50,6 +50,12 @@ before("Unlock all accounts", function() {
   })
 })
 
+before("Load system parameters", function() {
+  let params = web3.cmt.governance.getParams()
+  Globals.Params = params.data
+  logger.debug(Globals.Params)
+})
+
 before("Setup a ERC20 Smart contract called ETH", function(done) {
   logger.info(this.test.fullTitle())
   // check if contract already exists
@@ -67,18 +73,18 @@ before("Setup a ERC20 Smart contract called ETH", function(done) {
   }
 })
 
-before("Transfer 5000 CMT to A, B, C, D from defaultAccount", function(done) {
+before("Transfer 50000 CMT to A, B, C, D from defaultAccount", function(done) {
   logger.info(this.test.fullTitle())
   let balances = Utils.getBalance()
   let arrFund = []
   for (i = 0; i < 4; ++i) {
-    // 2000 cmt should be far enough for the testing
-    if (web3.fromWei(balances[i], "ether") > 2000) continue
+    // 20000 cmt should be far enough for the testing
+    if (web3.fromWei(balances[i], "cmt") > 20000) continue
 
     let hash = Utils.transfer(
       web3.cmt.defaultAccount,
       Globals.Accounts[i],
-      web3.toWei(5000, "ether"),
+      web3.toWei(50000, "cmt"),
       5 //gwei
     )
     arrFund.push(hash)

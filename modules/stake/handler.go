@@ -11,6 +11,7 @@ import (
 	"github.com/CyberMiles/travis/utils"
 	"github.com/ethereum/go-ethereum/common"
 	ethstat "github.com/ethereum/go-ethereum/core/state"
+	"math"
 	"math/big"
 	"strconv"
 )
@@ -412,12 +413,14 @@ func (d deliver) declareGenesisCandidacy(tx TxDeclareCandidacy, votingPower int6
 		return err
 	}
 
+	rp := int64(math.Sqrt(float64(votingPower * 10000)))
 	now := utils.GetNow()
 	candidate := &Candidate{
 		PubKey:       pubKey,
 		OwnerAddress: d.sender.String(),
 		Shares:       "0",
 		VotingPower:  votingPower,
+		RankingPower: rp,
 		MaxShares:    tx.MaxAmount,
 		CompRate:     tx.CompRate,
 		CreatedAt:    now,
@@ -626,7 +629,7 @@ func (d deliver) doWithdraw(delegation *Delegation, amount *big.Int, candidate *
 	now := utils.GetNow()
 
 	// record unstake requests, waiting 7 days
-	performedBlockHeight := d.height + int64(utils.GetParams().UnstakeWaitPeriod)
+	performedBlockHeight := d.height + int64(utils.GetParams().UnstakeWaitingPeriod)
 	// just for test
 	//performedBlockHeight := d.height + 4
 	unstakeRequest := &UnstakeRequest{"", delegation.DelegatorAddress, candidate.PubKey, d.height, performedBlockHeight, amount.String(), "PENDING", now, now}
@@ -652,6 +655,10 @@ func HandlePendingUnstakeRequests(height int64, store state.SimpleDB) error {
 		}
 
 		delegation := GetDelegation(req.DelegatorAddress, candidate.PubKey)
+		if delegation == nil {
+			continue
+		}
+
 		if delegation.Shares().Cmp(big.NewInt(0)) == 0 {
 			RemoveDelegation(delegation)
 		}

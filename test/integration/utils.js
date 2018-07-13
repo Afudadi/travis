@@ -110,7 +110,8 @@ const getDelegation = (acc_index, pk_index) => {
     delegate_amount: web3.toBigNumber(0),
     award_amount: web3.toBigNumber(0),
     withdraw_amount: web3.toBigNumber(0),
-    slash_amount: web3.toBigNumber(0)
+    slash_amount: web3.toBigNumber(0),
+    shares: web3.toBigNumber(0)
   }
   result = web3.cmt.stake.delegator.query(Globals.Accounts[acc_index], 0)
   if (result && result.data) {
@@ -124,49 +125,20 @@ const getDelegation = (acc_index, pk_index) => {
         withdraw_amount: web3.toBigNumber(data.withdraw_amount),
         slash_amount: web3.toBigNumber(data.slash_amount)
       }
+    delegation.shares = delegation.delegate_amount
+      .plus(delegation.award_amount)
+      .minus(delegation.withdraw_amount)
+      .minus(delegation.slash_amount)
   }
   logger.debug(
     "delegation: --> ",
     `delegate_amount: ${delegation.delegate_amount.toString(10)}`,
     `award_amount: ${delegation.award_amount.toString(10)}`,
     `withdraw_amount: ${delegation.withdraw_amount.toString(10)}`,
-    `slash_amount: ${delegation.slash_amount.toString(10)}`
+    `slash_amount: ${delegation.slash_amount.toString(10)}`,
+    `shares: ${delegation.shares.toString(10)}`
   )
   return delegation
-}
-
-const calcAward = powers => {
-  let total = powers.reduce((s, v) => {
-    return s + v
-  })
-  let origin = powers.map(p => p / total)
-  let round1 = origin.map(
-    p => (p > Globals.ValSizeLimit ? Globals.ValSizeLimit : p)
-  )
-
-  let left =
-    1 -
-    round1.reduce((s, v) => {
-      return s + v
-    })
-  let round2 = origin.map(p => left * p)
-
-  const strip = (x, precision = 12) => parseFloat(x.toPrecision(precision))
-  let final = round1.map((p, idx) => {
-    return strip(p + round2[idx])
-  })
-  // console.log(final)
-
-  let result = powers.map((p, idx) => p + final[idx] * Globals.BlockAwards)
-  // console.log(result)
-  return result
-}
-
-const calcAwards = (powers, blocks) => {
-  for (i = 0; i < blocks; ++i) {
-    powers = calcAward(powers)
-  }
-  return powers
 }
 
 const vote = (proposalId, from, answer) => {
@@ -185,8 +157,8 @@ const getProposal = proposalId => {
   expect(proposalId).to.not.be.empty
   if (proposalId === "") return
 
-  let r = web3.cmt.governance.queryProposals()
-  logger.debug("getProposal:", r)
+  let r = web3.cmt.governance.listProposals()
+  logger.debug("listProposals:", r)
 
   expect(r.data.length).to.be.above(0)
   if (r.data.length > 0) {
@@ -279,17 +251,20 @@ const expectTxSuccess = r => {
 }
 
 const gasFee = txType => {
-  let gasPrice = web3.toBigNumber(Globals.GasPrice)
+  let gasPrice = web3.toBigNumber(Globals.Params.gas_price)
   let gasLimit = 0
   switch (txType) {
     case "declareCandidacy":
-      gasLimit = web3.toBigNumber(Globals.GasLimit.DeclareCandidacy)
+      gasLimit = web3.toBigNumber(Globals.Params.declare_candidacy)
       break
     case "updateCandidacy":
-      gasLimit = web3.toBigNumber(Globals.GasLimit.UpdateCandidacy)
+      gasLimit = web3.toBigNumber(Globals.Params.update_candidacy)
       break
-    case "governancePropose":
-      gasLimit = web3.toBigNumber(Globals.GasLimit.GovernancePropose)
+    case "proposeTransferFund":
+      gasLimit = web3.toBigNumber(Globals.Params.transfer_fund_proposal)
+      break
+    case "proposeChangeParam":
+      gasLimit = web3.toBigNumber(Globals.Params.change_params_proposal)
       break
   }
   return gasPrice.times(gasLimit)
@@ -303,7 +278,7 @@ const addFakeValidators = () => {
     if (valsToAdd > 0) {
       Globals.Accounts.forEach((acc, idx) => {
         if (idx >= valsToAdd) return
-        let initAmount = 1000,
+        let initAmount = 10000,
           compRate = "0.8"
         let payload = {
           from: acc,
@@ -334,6 +309,120 @@ const removeFakeValidators = () => {
   }
 }
 
+const getBlockAward = () => {
+  const inflation_rate = Globals.Params.inflation_rate
+  let cmts = web3.toWei(web3.toBigNumber(1000000000), "cmt")
+  let blocksYr = (365 * 24 * 3600) / 10
+  let blockAward = cmts.times(inflation_rate / 100).dividedToIntegerBy(blocksYr)
+  return blockAward
+}
+
+const calcValAward = (award, vals) => {
+  logger.debug("calcValAward ->")
+  // percentage
+  let shares = vals.map(v => web3.toBigNumber(v.shares))
+  let total = shares.reduce((s, v) => {
+    return s.plus(v)
+  })
+
+  const toFixed = f => Number(parseFloat(f).toFixed(12))
+  let perc0 = shares.map(s => toFixed(s.div(total)))
+  logger.debug(perc0)
+
+  // threshold
+  const validator_size_threshold = Number(
+    Globals.Params.validator_size_threshold
+  )
+  let perc1 = perc0.map(
+    s => (s > validator_size_threshold ? validator_size_threshold : s)
+  )
+  logger.debug(perc1)
+
+  // 1st round with threshold
+  let round1 = vals.map((v, idx) =>
+    award.times(perc1[idx]).dividedToIntegerBy(1)
+  )
+  logger.debug("round1: ", round1.map(r => r.toString(10)))
+
+  // 2nd round for the rest
+  total = round1.reduce((s, v) => {
+    return s.plus(v)
+  })
+  let left = award.minus(total)
+  let round2 = vals.map((v, idx) =>
+    left.times(perc0[idx]).dividedToIntegerBy(1)
+  )
+  logger.debug("round2: ", round2.map(r => r.toString(10)))
+
+  // final
+  vals.forEach((v, idx) => {
+    v.shares = shares[idx]
+      .plus(round1[idx])
+      .plus(round2[idx])
+      .toString(10)
+  })
+  logger.debug("<- calcValAward")
+  return vals
+}
+
+const calcAwards = (nodes, blocks) => {
+  // block award -> validators and backups
+  let blockAward = getBlockAward()
+  let valAward = blockAward,
+    bakAward = 0
+
+  const max_vals = Number(Globals.Params.max_vals)
+  const val_ratio = Number(Globals.Params.validators_block_award_ratio / 100)
+  if (nodes.length > max_vals) {
+    valAward = blockAward.times(val_ratio).dividedToIntegerBy(1)
+    bakAward = blockAward.minus(valAward)
+  }
+
+  // distribute awards
+  let vals = nodes.filter(n => n.state == "Validator")
+  let baks = nodes.filter(n => n.state == "Backup Validator")
+
+  nodes.forEach(v => logger.debug(v.owner_address, v.shares, v.state))
+  for (i = 0; i < blocks; ++i) {
+    logger.debug("validators")
+    vals = calcValAward(valAward, vals)
+    logger.debug("backup validators")
+    if (baks.length > 0) baks = calcValAward(bakAward, baks)
+  }
+  vals.forEach(v => logger.debug(v.owner_address, v.shares))
+  baks.forEach(v => logger.debug(v.owner_address, v.shares))
+  return vals.concat(baks)
+}
+
+const calcDeleAward = (award, comp_rate, shares) => {
+  logger.debug("calcDeleAward ->")
+  let comp = award.times(comp_rate).dividedToIntegerBy(1)
+  let dele = award.minus(comp)
+  logger.debug(award.toString(10), comp.toString(10), dele.toString(10))
+
+  let total = shares.reduce((s, v) => {
+    return s.plus(v)
+  })
+  const toFixed = f => Number(parseFloat(f).toFixed(12))
+  percs = shares.map(s => toFixed(s.div(total)))
+  logger.debug(percs)
+
+  let result = percs.map((p, idx) =>
+    shares[idx].plus(dele.times(p)).dividedToIntegerBy(1)
+  )
+  result[2] = result[2].plus(comp)
+  logger.debug(result.map(r => r.toString(10)))
+  logger.debug("<- calcDeleAward")
+  return result
+}
+
+const calcDeleAwards = (award, comp_rate, shares, blocks) => {
+  for (i = 0; i < blocks; ++i) {
+    shares = calcDeleAward(award, comp_rate, shares)
+  }
+  return shares
+}
+
 module.exports = {
   transfer,
   getBalance,
@@ -342,7 +431,6 @@ module.exports = {
   tokenKill,
   getTokenBalance,
   getDelegation,
-  calcAwards,
   vote,
   getProposal,
   waitInterval,
@@ -352,5 +440,7 @@ module.exports = {
   expectTxSuccess,
   gasFee,
   addFakeValidators,
-  removeFakeValidators
+  removeFakeValidators,
+  calcAwards,
+  calcDeleAwards
 }

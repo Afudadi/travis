@@ -2,31 +2,32 @@ package app
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"math/big"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
-	"github.com/CyberMiles/travis/sdk/errors"
-	sm "github.com/CyberMiles/travis/sdk/state"
-	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/iavl"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	dbm "github.com/tendermint/tmlibs/db"
-	"github.com/tendermint/tendermint/libs/log"
-
-	"database/sql"
-	"encoding/hex"
-	"encoding/json"
-	"github.com/CyberMiles/travis/modules/governance"
-	"github.com/CyberMiles/travis/modules/stake"
-	"github.com/ethereum/go-ethereum/common"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/viper"
-	"github.com/tendermint/tendermint/libs/cli"
 	"golang.org/x/crypto/ripemd160"
-	"os"
-	"math/big"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/tendermint/iavl"
+	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/libs/cli"
+	cmn "github.com/tendermint/tendermint/libs/common"
+	dbm "github.com/tendermint/tendermint/libs/db"
+	"github.com/tendermint/tendermint/libs/log"
+
+	"github.com/CyberMiles/travis/modules/governance"
+	"github.com/CyberMiles/travis/modules/stake"
+	"github.com/CyberMiles/travis/sdk/errors"
+	sm "github.com/CyberMiles/travis/sdk/state"
 )
 
 // DefaultHistorySize is how many blocks of history to store for ABCI queries
@@ -69,12 +70,12 @@ func NewStoreApp(appName, dbName string, cacheSize int, logger log.Logger) (*Sto
 	}
 
 	app := &StoreApp{
-		Name:   appName,
-		state:  state,
-		height: state.LatestHeight(),
-		info:   sm.NewChainState(),
+		Name:            appName,
+		state:           state,
+		height:          state.LatestHeight(),
+		info:            sm.NewChainState(),
 		TotalUsedGasFee: big.NewInt(0),
-		logger: logger.With("module", "app"),
+		logger:          logger.With("module", "app"),
 	}
 	return app, nil
 }
@@ -187,7 +188,7 @@ func (app *StoreApp) Query(reqQuery abci.RequestQuery) (resQuery abci.ResponseQu
 				break
 			}
 			resQuery.Value = value
-			resQuery.Proof = proof.Bytes()
+			resQuery.Proof = proof.ComputeRootHash()
 		} else {
 			value := tree.Get(key)
 			resQuery.Value = value
@@ -319,7 +320,7 @@ func initTravisDb() error {
 		defer db.Close()
 
 		sqlStmt := `
-		create table candidates(address text not null primary key, pub_key text not null, shares text not null default '0', voting_power integer default 0, max_shares text not null default '0', comp_rate text not null default '0', name text not null default '', website text not null default '', location text not null default '', email text not null default '', profile text not null default '', verified text not null default 'N', active text not null default 'Y', rank integer not null default 0, state text not null default '', hash text not null default '', block_height integer not null, created_at text not null, updated_at text not null default '');
+		create table candidates(address text not null primary key, pub_key text not null, shares text not null default '0', voting_power integer default 0, ranking_power integer default 0, max_shares text not null default '0', comp_rate text not null default '0', name text not null default '', website text not null default '', location text not null default '', email text not null default '', profile text not null default '', verified text not null default 'N', active text not null default 'Y', rank integer not null default 0, state text not null default '', hash text not null default '', block_height integer not null, created_at text not null, updated_at text not null default '');
 		create unique index idx_candidates_pub_key on candidates(pub_key);
 		create index idx_candidates_hash on candidates(hash);
 
